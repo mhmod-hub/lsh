@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// My Sweet Global Variables ;)
 int history_count = 0;
 int history_capacity = 0;
 char** history_array = NULL;
@@ -84,7 +83,6 @@ int lsh_cd(char** args) {
     if (args[1] == NULL) {
         fprintf(stderr, "lsh: expected argument to \"cd\"\n");
     }
-    // NEW: Check for extra arguments
     else if (args[2] != NULL) {
         fprintf(stderr, "lsh: \"cd\" takes exactly one argument.\n");
     }
@@ -384,34 +382,27 @@ void lsh_loop(void)
         printf("> ");
         line = lsh_read_line();
 
-        // --- NEW: Dynamic history allocation logic ---
         if (line != NULL && line[0] != '\0' && line[0] != '\n') {
             line[strcspn(line, "\n")] = 0;
 
-            // If our array is full (or hasn't been created yet), expand it
             if (history_count >= history_capacity) {
-                // Expand by 64 slots at a time (you can choose any chunk size)
                 history_capacity += 64;
 
-                // Reallocate the array to the new, larger size
                 char** temp = realloc(history_array, history_capacity * sizeof(char*));
 
                 if (!temp) {
                     fprintf(stderr, "lsh: history allocation error\n");
-                    // Fallback: if we run out of memory, just don't save this command
                 }
                 else {
                     history_array = temp;
                 }
             }
 
-            // Save the command and increment the count
             if (history_array != NULL) {
                 history_array[history_count] = strdup(line);
                 history_count++;
             }
         }
-        // ---------------------------------------------
 
         args = lsh_split_line(line);
         status = lsh_execute(args);
