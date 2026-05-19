@@ -17,6 +17,13 @@
 #include <stdio.h>
 #include <string.h>
 
+// My Sweet Global Variables ;)
+int history_count = 0;
+int history_capacity = 0;
+char** history_array = NULL;
+
+extern char** environ;
+
 /*
   Function Declarations for builtin shell commands:
  */
@@ -24,23 +31,44 @@ int lsh_cd(char **args);
 int lsh_help(char **args);
 int lsh_exit(char **args);
 
+
+int lsh_pwd(char** args);
+int lsh_echo(char** args);
+int lsh_history(char** args);
+int lsh_env(char** args);
+int lsh_export(char** args);
+int lsh_unset(char** args);
+
+
 /*
   List of builtin commands, followed by their corresponding functions.
  */
 char *builtin_str[] = {
   "cd",
   "help",
-  "exit"
+  "exit",
+  "pwd",
+  "echo",
+  "history",
+  "env",
+  "export",
+  "unset"
 };
 
 int (*builtin_func[]) (char **) = {
   &lsh_cd,
   &lsh_help,
-  &lsh_exit
+  &lsh_exit,
+  & lsh_pwd,
+  & lsh_echo,
+  & lsh_history,
+  & lsh_env,
+  & lsh_export,
+  & lsh_unset
 };
 
 int lsh_num_builtins() {
-  return sizeof(builtin_str) / sizeof(char *);
+    return sizeof(builtin_str) / sizeof(char *);
 }
 
 /*
@@ -52,16 +80,20 @@ int lsh_num_builtins() {
    @param args List of args.  args[0] is "cd".  args[1] is the directory.
    @return Always returns 1, to continue executing.
  */
-int lsh_cd(char **args)
-{
-  if (args[1] == NULL) {
-    fprintf(stderr, "lsh: expected argument to \"cd\"\n");
-  } else {
-    if (chdir(args[1]) != 0) {
-      perror("lsh");
+int lsh_cd(char** args) {
+    if (args[1] == NULL) {
+        fprintf(stderr, "lsh: expected argument to \"cd\"\n");
     }
-  }
-  return 1;
+    // NEW: Check for extra arguments
+    else if (args[2] != NULL) {
+        fprintf(stderr, "lsh: \"cd\" takes exactly one argument.\n");
+    }
+    else {
+        if (chdir(args[1]) != 0) {
+            perror("lsh");
+        }
+    }
+    return 1;
 }
 
 /**
@@ -69,19 +101,24 @@ int lsh_cd(char **args)
    @param args List of args.  Not examined.
    @return Always returns 1, to continue executing.
  */
-int lsh_help(char **args)
+int lsh_help(char** args)
 {
-  int i;
-  printf("Stephen Brennan's LSH\n");
-  printf("Type program names and arguments, and hit enter.\n");
-  printf("The following are built in:\n");
+    if (args[1] != NULL) {
+        fprintf(stderr, "lsh: \"help\" does not take any arguments.\n");
+        return 1;
+    }
 
-  for (i = 0; i < lsh_num_builtins(); i++) {
-    printf("  %s\n", builtin_str[i]);
-  }
+    int i;
+    printf("Stephen Brennan's LSH\n");
+    printf("Type program names and arguments, and hit enter.\n");
+    printf("The following are built in:\n");
 
-  printf("Use the man command for information on other programs.\n");
-  return 1;
+    for (i = 0; i < lsh_num_builtins(); i++) {
+        printf("  %s\n", builtin_str[i]);
+    }
+
+    printf("Use the man command for information on other programs.\n");
+    return 1;
 }
 
 /**
@@ -91,7 +128,95 @@ int lsh_help(char **args)
  */
 int lsh_exit(char **args)
 {
-  return 0;
+    return 0;
+}
+
+int lsh_pwd(char** args) {
+    if (args[1] != NULL) {
+        fprintf(stderr, "lsh: \"pwd\" does not take any arguments.\n");
+        return 1;
+    }
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        printf("%s\n", cwd);
+    }
+    else {
+        perror("lsh");
+    }
+    return 1;
+}
+
+int lsh_echo(char** args) {
+    int i = 1;
+    while (args[i] != NULL) {
+        printf("%s ", args[i]);
+        i++;
+    }
+    printf("\n");
+    return 1;
+}
+
+int lsh_history(char** args) {
+    if (args[1] != NULL) {
+        fprintf(stderr, "lsh: \"history\" does not take any arguments.\n");
+        return 1;
+    }
+    for (int i = 0; i < history_count; i++) {
+        printf("%d  %s\n", i + 1, history_array[i]);
+    }
+    return 1;
+}
+
+int lsh_env(char** args) {
+    if (args[1] != NULL) {
+        fprintf(stderr, "lsh: \"env\" does not take any arguments.\n");
+        return 1;
+    }
+    int i = 0;
+    while (environ[i] != NULL) {
+        printf("%s\n", environ[i]);
+        i++;
+    }
+    return 1;
+}
+
+int lsh_export(char** args) {
+    if (args[1] == NULL) {
+        fprintf(stderr, "lsh: expected argument to \"export\" (format VAR=VALUE)\n");
+        return 1;
+    }
+    if (args[2] != NULL) {
+        fprintf(stderr, "lsh: \"export\" takes exactly one argument. Do not use spaces around the '=' sign.\n");
+        return 1;
+    }
+    char* name = strtok(args[1], "=");
+    char* value = strtok(NULL, "");
+
+    if (name != NULL && value != NULL) {
+        if (setenv(name, value, 1) != 0) {
+            perror("lsh");
+        }
+    }
+    else {
+        fprintf(stderr, "lsh: export format must be VAR=VALUE\n");
+    }
+    return 1;
+}
+
+int lsh_unset(char** args) {
+    if (args[1] == NULL) {
+        fprintf(stderr, "lsh: expected argument to \"unset\"\n");
+    }
+    else if (args[2] != NULL) {
+        fprintf(stderr, "lsh: \"unset\" takes exactly one argument.\n");
+        return 1;
+    }
+    else {
+        if (unsetenv(args[1]) != 0) {
+            perror("lsh");
+        }
+    }
+    return 1;
 }
 
 /**
@@ -101,27 +226,29 @@ int lsh_exit(char **args)
  */
 int lsh_launch(char **args)
 {
-  pid_t pid;
-  int status;
+    pid_t pid;
+    int status;
 
-  pid = fork();
-  if (pid == 0) {
-    // Child process
-    if (execvp(args[0], args) == -1) {
-      perror("lsh");
+    pid = fork();
+    if (pid == 0) {
+        // Child process
+        if (execvp(args[0], args) == -1) {
+            perror("lsh");
+        }
+        exit(EXIT_FAILURE);
     }
-    exit(EXIT_FAILURE);
-  } else if (pid < 0) {
-    // Error forking
-    perror("lsh");
-  } else {
-    // Parent process
-    do {
-      waitpid(pid, &status, WUNTRACED);
-    } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-  }
+    else if (pid < 0) {
+        // Error forking
+        perror("lsh");
+    }
+    else {
+        // Parent process
+        do {
+            waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
 
-  return 1;
+    return 1;
 }
 
 /**
@@ -131,20 +258,20 @@ int lsh_launch(char **args)
  */
 int lsh_execute(char **args)
 {
-  int i;
+    int i;
 
-  if (args[0] == NULL) {
-    // An empty command was entered.
-    return 1;
-  }
-
-  for (i = 0; i < lsh_num_builtins(); i++) {
-    if (strcmp(args[0], builtin_str[i]) == 0) {
-      return (*builtin_func[i])(args);
+    if (args[0] == NULL) {
+        // An empty command was entered.
+        return 1;
     }
-  }
 
-  return lsh_launch(args);
+    for (i = 0; i < lsh_num_builtins(); i++) {
+        if (strcmp(args[0], builtin_str[i]) == 0) {
+            return (*builtin_func[i])(args);
+        }
+    }
+
+    return lsh_launch(args);
 }
 
 /**
@@ -249,19 +376,49 @@ char **lsh_split_line(char *line)
  */
 void lsh_loop(void)
 {
-  char *line;
-  char **args;
-  int status;
+    char* line;
+    char** args;
+    int status;
 
-  do {
-    printf("> ");
-    line = lsh_read_line();
-    args = lsh_split_line(line);
-    status = lsh_execute(args);
+    do {
+        printf("> ");
+        line = lsh_read_line();
 
-    free(line);
-    free(args);
-  } while (status);
+        // --- NEW: Dynamic history allocation logic ---
+        if (line != NULL && line[0] != '\0' && line[0] != '\n') {
+            line[strcspn(line, "\n")] = 0;
+
+            // If our array is full (or hasn't been created yet), expand it
+            if (history_count >= history_capacity) {
+                // Expand by 64 slots at a time (you can choose any chunk size)
+                history_capacity += 64;
+
+                // Reallocate the array to the new, larger size
+                char** temp = realloc(history_array, history_capacity * sizeof(char*));
+
+                if (!temp) {
+                    fprintf(stderr, "lsh: history allocation error\n");
+                    // Fallback: if we run out of memory, just don't save this command
+                }
+                else {
+                    history_array = temp;
+                }
+            }
+
+            // Save the command and increment the count
+            if (history_array != NULL) {
+                history_array[history_count] = strdup(line);
+                history_count++;
+            }
+        }
+        // ---------------------------------------------
+
+        args = lsh_split_line(line);
+        status = lsh_execute(args);
+
+        free(line);
+        free(args);
+    } while (status);
 }
 
 /**
